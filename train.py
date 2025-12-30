@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # Change to "0" for first GPU
 import sys
 from datetime import datetime
 from typing import Dict

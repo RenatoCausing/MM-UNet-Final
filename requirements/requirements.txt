@@ -1,18 +1,39 @@
-timm==0.4.12
-objprint==0.2.3
-accelerate==0.18.0
+# PyTorch and Vision
 torch==2.0.0
-tensorboard
-easydict
-SimpleITK
+torchvision==0.15.0
+torchaudio==2.0.0
+
+# Core ML Libraries
+timm==0.4.12
 monai
-pathlib
+accelerate==0.18.0
+
+# Medical Imaging
+SimpleITK
 nibabel
-pyyaml
-opencv-python
-openpyxl
-scikit-learn
+
+# Data Processing
+numpy
 pandas
+scikit-learn
+opencv-python
+Pillow
+tqdm
+
+# Utilities
+easydict
+pyyaml
+objprint==0.2.3
+pathlib
+openpyxl
+
+# Visualization & Logging
 matplotlib
+tensorboard
+seaborn
+
+# Jupyter (optional)
+jupyter
+ipykernel
 tqdm
 Pillow
