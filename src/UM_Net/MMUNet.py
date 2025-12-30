@@ -371,14 +371,12 @@ class RCG(nn.Module):
             stride=2, 
             padding=1
         )
+        # Mamba v2.x API - removed bimamba_type and nslices parameters
         self.mamba = Mamba(
                 d_model=64, # Model dimension d_model
                 d_state=d_state,  # SSM state expansion factor
                 d_conv=d_conv,    # Local convolution width
                 expand=expand,    # Block expansion factor
-                # bimamba_type="v1",
-                bimamba_type="v3",   # TODO: set 154 assert bimamba_type=="v3" as none
-                nslices = num_slices
         )
         
         self.mlp = nn.Sequential(nn.Conv2d(64, 1, kernel_size=1),
