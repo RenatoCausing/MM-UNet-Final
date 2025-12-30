@@ -133,25 +133,25 @@ def main():
         "Step 9: Installing medical imaging packages"
     )
     
-    # Step 10: Install Mamba - use EXACT versions known to work with PyTorch 2.3 + CUDA 12.1
+    # Step 10: Install Mamba - MUST use --no-build-isolation to use existing torch
     print("\n" + "="*60)
-    print("Step 10: Installing Mamba SSM (this may take a few minutes)")
+    print("Step 10: Installing Mamba SSM (this may take 5-15 minutes)")
     print("="*60)
     
     mamba_installed = False
     
-    # Method 1: Try specific versions that have pre-built wheels for torch 2.3 + cu121
-    print("\nTrying Method 1: Pre-built wheels for PyTorch 2.3 + CUDA 12.1...")
+    # Method 1: Use --no-build-isolation (REQUIRED - uses existing torch)
+    print("\nInstalling with --no-build-isolation (uses existing PyTorch)...")
     
     # First install causal-conv1d
     ret1 = run_command(
-        f"{pip} install causal-conv1d==1.2.2.post1",
+        f"{pip} install causal-conv1d --no-build-isolation",
         ignore_error=True
     )
     
     # Then install mamba-ssm
     ret2 = run_command(
-        f"{pip} install mamba-ssm==2.0.4",
+        f"{pip} install mamba-ssm --no-build-isolation",
         ignore_error=True
     )
     
@@ -163,37 +163,31 @@ def main():
     if ret_verify == 0:
         mamba_installed = True
     
-    # Method 2: Try older stable versions
+    # Method 2: Try specific versions with --no-build-isolation
     if not mamba_installed:
-        print("\nMethod 1 failed. Trying Method 2: Older stable versions...")
+        print("\nMethod 1 failed. Trying specific versions...")
         run_command(f"{pip} uninstall -y causal-conv1d mamba-ssm", ignore_error=True)
         
-        run_command(f"{pip} install causal-conv1d==1.1.3.post1", ignore_error=True)
-        run_command(f"{pip} install mamba-ssm==1.2.2", ignore_error=True)
+        run_command(f"{pip} install causal-conv1d==1.2.2.post1 --no-build-isolation", ignore_error=True)
+        run_command(f"{pip} install mamba-ssm==2.0.4 --no-build-isolation", ignore_error=True)
         
         ret_verify = run_command(
-            f'{python} -c "from mamba_ssm import Mamba; print(\'✓ Mamba v1.2.2 installed!\')"',
+            f'{python} -c "from mamba_ssm import Mamba; print(\'✓ Mamba v2.0.4 installed!\')"',
             ignore_error=True
         )
         if ret_verify == 0:
             mamba_installed = True
     
-    # Method 3: Build from source with --no-build-isolation
+    # Method 3: Try older versions
     if not mamba_installed:
-        print("\nMethod 2 failed. Trying Method 3: Build from source...")
+        print("\nMethod 2 failed. Trying older versions...")
         run_command(f"{pip} uninstall -y causal-conv1d mamba-ssm", ignore_error=True)
         
-        run_command(
-            f"{pip} install causal-conv1d --no-build-isolation",
-            ignore_error=True
-        )
-        run_command(
-            f"{pip} install mamba-ssm --no-build-isolation",
-            ignore_error=True
-        )
+        run_command(f"{pip} install causal-conv1d==1.1.3.post1 --no-build-isolation", ignore_error=True)
+        run_command(f"{pip} install mamba-ssm==1.2.2 --no-build-isolation", ignore_error=True)
         
         ret_verify = run_command(
-            f'{python} -c "from mamba_ssm import Mamba; print(\'✓ Mamba built from source!\')"',
+            f'{python} -c "from mamba_ssm import Mamba; print(\'✓ Mamba v1.2.2 installed!\')"',
             ignore_error=True
         )
         if ret_verify == 0:

@@ -121,24 +121,16 @@ echo "============================================================"
 echo "Step 11: Installing Mamba SSM..."
 echo "============================================================"
 
-# Try pre-built wheels first
-python3.10 -m pip install causal-conv1d==1.2.2.post1 || true
-python3.10 -m pip install mamba-ssm==2.0.4 || true
+# MUST use --no-build-isolation so it uses the torch we just installed
+python3.10 -m pip install causal-conv1d --no-build-isolation || true
+python3.10 -m pip install mamba-ssm --no-build-isolation || true
 
 # Verify mamba
 if ! python3.10 -c "from mamba_ssm import Mamba" 2>/dev/null; then
-    echo "Method 1 failed, trying older versions..."
+    echo "First attempt failed, trying with specific versions..."
     python3.10 -m pip uninstall -y causal-conv1d mamba-ssm 2>/dev/null || true
-    python3.10 -m pip install causal-conv1d==1.1.3.post1 || true
-    python3.10 -m pip install mamba-ssm==1.2.2 || true
-fi
-
-# Final verification
-if ! python3.10 -c "from mamba_ssm import Mamba" 2>/dev/null; then
-    echo "Method 2 failed, building from source..."
-    python3.10 -m pip uninstall -y causal-conv1d mamba-ssm 2>/dev/null || true
-    python3.10 -m pip install causal-conv1d --no-build-isolation || true
-    python3.10 -m pip install mamba-ssm --no-build-isolation || true
+    python3.10 -m pip install causal-conv1d==1.2.2.post1 --no-build-isolation || true
+    python3.10 -m pip install mamba-ssm==2.0.4 --no-build-isolation || true
 fi
 
 # Step 12: Final verification
