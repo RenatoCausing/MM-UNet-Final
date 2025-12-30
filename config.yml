@@ -14,11 +14,48 @@ trainer:
 #  dataset_choose: EDD_seg
 #  dataset_choose: PolypGen
 #  dataset_choose: Sun_seg
-  dataset_choose: DRIVE
+#  dataset_choose: DRIVE
   # dataset_choose: STARE
+  dataset_choose: FIVES
 
 
 dataset:
+  FIVES:
+    # Expected folder structure in repo:
+    # ./Original/  - contains original images (0001.png, 0002.png, ...)
+    # ./Segmented/ - contains segmented images (0001.png, 0002.png, ...)
+    # The data_root points to the repo folder containing Original and Segmented
+    data_root: ./
+    batch_size: 2
+    num_workers: 4
+    image_size: 1024
+    image_mean: [0.485, 0.456, 0.406]
+    image_std: [0.229, 0.224, 0.225]
+    # FIVES specific settings
+    train_dir: .
+    val_dir: .
+    image_subdir: Original
+    label_subdir: Segmented
+    train_label_pattern: "{base_name}.png"
+    val_label_pattern: "{base_name}.png"
+    # Train/val/test split (70% train, 15% val, 15% test)
+    train_ratio: 0.7
+    val_ratio: 0.15
+    test_ratio: 0.15
+    # Augmentation transforms (used during training)
+    transform_cutmix: False
+    transform_random_resized_crop: True
+    transform_random_resized_crop_prob: 0.3
+    transform_random_resized_crop_scale: [0.8, 1.2]
+    transform_jitter: True
+    transform_jitter_prob: 0.5
+    jitter_params:
+      brightness: 0.2
+      contrast: 0.2
+      saturation: 0.1
+      hue: 0.05
+    transform_blur: False
+
   DRIVE:
     data_root: /root/.cache/huggingface/forget/datasets/DRIVE
     batch_size: 5
@@ -61,9 +98,14 @@ finetune:
 
 
 visualization:
-  img_path: "/root/.cache/huggingface/forget/datasets/DRIVE/val/input/"
-  mask_path: "/root/.cache/huggingface/forget/datasets/DRIVE/val/label/"
-  visualization_path: "./visualization/DRIVE/output/"
+  # FIVES visualization paths
+  img_path: "./Original/"
+  mask_path: "./Segmented/"
+  visualization_path: "./visualization/FIVES/output/"
+  # DRIVE paths (commented)
+  # img_path: "/root/.cache/huggingface/forget/datasets/DRIVE/val/input/"
+  # mask_path: "/root/.cache/huggingface/forget/datasets/DRIVE/val/label/"
+  # visualization_path: "./visualization/DRIVE/output/"
   # img_path: "/root/datasets/STARE/val/"
   # mask_path: "/root/datasets/STARE/val/label"
   # visualization_path: "/root/datasets/STARE/output"

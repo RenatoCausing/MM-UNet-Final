@@ -1,5 +1,17 @@
+# ===========================================
+# FIVES Dataset - Ignore large image folders
+# ===========================================
+Original/
+Segmented/
+
+# IDE and editor files
 .idea
+.vscode/
+
+# Lock files
 uv.lock
+
+# Large folders
 img
 data
 logs
@@ -7,12 +19,41 @@ score
 visualization
 SegMamba
 dataset
-**/__pycache__/
-model_store
 output_slices
+
+# Python cache
+**/__pycache__/
+*.py[cod]
+*$py.class
+
+# Build artifacts
 requirements/Mamba/causal-conv1d/build
 requirements/Mamba/causal-conv1d/causal_conv1d.egg-info
 requirements/Mamba/causal-conv1d/dist
 requirements/Mamba/mamba/build
 requirements/Mamba/mamba/mamba_ssm.egg-info
 requirements/Mamba/mamba/dist
+
+# Test results (regeneratable)
+test_results/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# ===========================================
+# IMPORTANT: Include model weights for GitHub
+# ===========================================
+# We WANT to track model_store for weights
+# But ignore large files that aren't weights
+model_store/**/*.npy
+model_store/**/optimizer*
+model_store/**/scheduler*
+model_store/**/random_states*
+
+# DO NOT ignore these (model weights we want to push):
+# - model_store/**/*.bin (PyTorch weights)
+# - model_store/**/*.pth
+# - model_store/**/*.pth.tar
+# - model_store/**/pytorch_model.bin
+# - normalization_stats.json

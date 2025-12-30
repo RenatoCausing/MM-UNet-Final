@@ -105,7 +105,10 @@ def val_one_epoch(model: torch.nn.Module, loss_functions: Dict[str, torch.nn.mod
             f'Epoch [{epoch + 1}/{config.trainer.num_epochs}] Validation [{i + 1}/{len(val_loader)}] Loss: {total_loss:1.5f} {log}',
             flush=True)
         step += 1
-        np.save("./visualization/DRIVE/output/numpy" + '/' + str(i) + '.npy', val_outputs.cpu().detach().numpy())
+        # Save validation outputs to visualization folder based on dataset
+        numpy_output_dir = f"./visualization/{config.trainer.dataset_choose}/output/numpy"
+        os.makedirs(numpy_output_dir, exist_ok=True)
+        np.save(numpy_output_dir + '/' + str(i) + '.npy', val_outputs.cpu().detach().numpy())
     metric = {}
     if config.trainer.dataset_choose != 'EDD_seg':
         for metric_name in metrics:
@@ -175,6 +178,12 @@ if __name__ == '__main__':
         from src.VesselLoader import get_dataloader
         train_loader, val_loader = get_dataloader(config)
         image_size = config.dataset.DRIVE.image_size
+        include_background = True
+
+    elif config.trainer.dataset_choose == 'FIVES':
+        from src.FIVESLoader import get_dataloader
+        train_loader, val_loader, test_loader = get_dataloader(config)
+        image_size = config.dataset.FIVES.image_size
         include_background = True
 
     inference = monai.inferers.SlidingWindowInferer(roi_size=ensure_tuple_rep(image_size, 2), overlap=0.5,
