@@ -24,14 +24,12 @@ class MMConv(nn.Module):
         if morph not in (0, 1):
             raise ValueError("morph should be 0 or 1.")
 
+        # Mamba v2.x API - removed bimamba_type and nslices parameters
         self.mamba = Mamba(
                 d_model=kernel_size, # Model dimension d_model
                 d_state=16,  # SSM state expansion factor
                 d_conv=4,    # Local convolution width
                 expand=2,    # Block expansion factor
-                bimamba_type="v1",
-                # bimamba_type="v3",   # TODO: set 154 assert bimamba_type=="v3" as none
-                nslices = num_slices
         )
 
         self.kernel_size = kernel_size
