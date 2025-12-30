@@ -558,7 +558,7 @@ def get_dataloader(config: EasyDict) -> Tuple[Optional[TorchDataLoader], Optiona
         seed=42
     )
     
-    print(f"{Colors.GREEN}Train: {len(train_samples)}, Val: {len(val_samples)}, Test: {len(test_samples)}{Colors.END}")
+    print(f"{Colors.GREEN}Train: {len(train_samples)}, Val: {len(val_samples) if val_samples else 0}, Test: {len(test_samples)}{Colors.END}")
     
     # Compute or load normalization stats FROM TRAINING SET ONLY
     # This prevents data leakage - test/val data never influences normalization
@@ -591,7 +591,7 @@ def get_dataloader(config: EasyDict) -> Tuple[Optional[TorchDataLoader], Optiona
         train_loader = train_dataloader_wrapper.Loader
         print(f"{Colors.GREEN}Created train loader with {len(train_samples)} samples{Colors.END}")
     
-    if val_samples:
+    if val_samples and len(val_samples) > 0:
         val_dataloader_wrapper = FIVESDataLoader(
             samples=val_samples,
             mode='validation',
@@ -603,6 +603,8 @@ def get_dataloader(config: EasyDict) -> Tuple[Optional[TorchDataLoader], Optiona
         )
         val_loader = val_dataloader_wrapper.Loader
         print(f"{Colors.GREEN}Created validation loader with {len(val_samples)} samples{Colors.END}")
+    else:
+        print(f"{Colors.YELLOW}No validation set (val_ratio=0.0){Colors.END}")
     
     if test_samples:
         test_dataloader_wrapper = FIVESDataLoader(

@@ -252,28 +252,29 @@ if __name__ == '__main__':
     # }
 
     step = 0
-    best_eopch = -1
-    val_step = 0
     starting_epoch = 0
-    best_acc = torch.tensor(0)
-    best_class = []
 
-    model, optimizer, scheduler, train_loader, val_loader = accelerator.prepare(model, optimizer, scheduler,
-                                                                                train_loader, val_loader)
+    # Prepare model and optimizer, but check if val_loader exists
+    if val_loader is not None:
+        model, optimizer, scheduler, train_loader, val_loader = accelerator.prepare(model, optimizer, scheduler,
+                                                                                    train_loader, val_loader)
+    else:
+        model, optimizer, scheduler, train_loader = accelerator.prepare(model, optimizer, scheduler, train_loader)
+    
     if config.trainer.resume:
-        model, optimizer, scheduler, starting_epoch, train_step, best_acc, best_class = utils.resume_train_state(model,
-                                                                                                                 '{}'.format(
-                                                                                                                     config.finetune.checkpoint),
-                                                                                                                 optimizer,
-                                                                                                                 scheduler,
-                                                                                                                 train_loader,
-                                                                                                                 accelerator)
-        val_step = train_step
-
-    best_acc = best_acc.to(accelerator.device)
+        model, optimizer, scheduler, starting_epoch, train_step, _, _ = utils.resume_train_state(model,
+                                                                                                 '{}'.format(
+                                                                                                     config.finetune.checkpoint),
+                                                                                                 optimizer,
+                                                                                                 scheduler,
+                                                                                                 train_loader,
+                                                                                                 accelerator)
+        step = train_step
 
     # 开始训练
     accelerator.print("Start Training! ")
+    accelerator.print(f"Training for {config.trainer.num_epochs} epochs with 95% train / 5% test split")
+    accelerator.print("Saving weights for every epoch...")
 
     for epoch in range(starting_epoch, config.trainer.num_epochs):
         # 训练
@@ -281,28 +282,81 @@ if __name__ == '__main__':
                                optimizer, scheduler, config, metrics,
                                post_trans, accelerator, epoch, step, loss_weights)
 
-        mean_acc, batch_acc, val_step = val_one_epoch(model, loss_functions, inference, val_loader,
-                                                      config, metrics, val_step,
-                                                      post_trans, accelerator, epoch)
-
-        # 保存模型
-        if mean_acc > best_acc:
-            accelerator.wait_for_everyone()
-            accelerator.save_state(output_dir=f"{os.getcwd()}/model_store/{config.finetune.checkpoint}/best")
-            best_acc = mean_acc
-            best_class = batch_acc
-            best_eopch = epoch
-        accelerator.print('Cheakpoint...')
+        # 保存每个epoch的模型权重
+        accelerator.print(f'Saving checkpoint for epoch {epoch + 1}...')
         accelerator.wait_for_everyone()
-        accelerator.save_state(output_dir=f"{os.getcwd()}/model_store/{config.finetune.checkpoint}/checkpoint")
-        torch.save({'epoch': epoch, 'best_acc': best_acc, 'best_class': batch_acc},
-                   f'{os.getcwd()}/model_store/{config.finetune.checkpoint}/checkpoint/epoch.pth.tar')
+        epoch_dir = f"{os.getcwd()}/model_store/{config.finetune.checkpoint}/epoch_{epoch + 1:03d}"
+        accelerator.save_state(output_dir=epoch_dir)
+        torch.save({'epoch': epoch},
+                   f'{epoch_dir}/epoch_info.pth.tar')
         
-        accelerator.print(
-            f'Epoch [{epoch + 1}/{config.trainer.num_epochs}] best acc:{best_acc}, Now : mean acc: {mean_acc}, mean class: {batch_acc}')
+        accelerator.print(f'Epoch [{epoch + 1}/{config.trainer.num_epochs}] completed and saved to {epoch_dir}')
 
+    # Save final checkpoint
+    accelerator.print('Saving final checkpoint...')
+    accelerator.wait_for_everyone()
+    final_dir = f"{os.getcwd()}/model_store/{config.finetune.checkpoint}/final"
+    accelerator.save_state(output_dir=final_dir)
 
-    accelerator.print(f"best acc: {best_acc}")
-    accelerator.print(f"best class : {best_class}")
-    accelerator.print(f"best epochs: {best_eopch}")
-    sys.exit(1)
+    accelerator.print(f"\n{'='*60}")
+    accelerator.print("Training completed! All epoch weights saved.")
+    accelerator.print(f"{'='*60}")
+    
+    # Test on the 5% test set
+    if test_loader is not None:
+        accelerator.print("\n" + "="*60)
+        accelerator.print("Testing on 5% test set...")
+        accelerator.print("="*60)
+        
+        test_step = 0
+        test_metrics = {
+            'dice_metric': monai.metrics.DiceMetric(include_background=include_background,
+                                                    reduction=monai.utils.MetricReduction.MEAN_BATCH, get_not_nans=True),
+            'miou_metric': monai.metrics.MeanIoU(include_background=include_background, reduction="mean_channel"),
+            'f1': monai.metrics.ConfusionMatrixMetric(include_background=include_background, metric_name='f1 score'),
+            'precision': monai.metrics.ConfusionMatrixMetric(include_background=include_background,
+                                                            metric_name="precision"),
+            'recall': monai.metrics.ConfusionMatrixMetric(include_background=include_background, metric_name="recall"),
+            'MCC': monai.metrics.ConfusionMatrixMetric(include_background=include_background, metric_name="matthews correlation coefficient"),
+            'ACC': monai.metrics.ConfusionMatrixMetric(include_background=include_background, metric_name="accuracy"),
+        }
+        
+        # Prepare test_loader
+        test_loader = accelerator.prepare(test_loader)
+        
+        # Run testing
+        model.eval()
+        with torch.no_grad():
+            for i, image_batch in enumerate(test_loader):
+                logits = inference(image_batch[0], model)
+                val_outputs = post_trans(logits)
+                for metric_name in test_metrics:
+                    test_metrics[metric_name](y_pred=val_outputs, y=image_batch[1])
+                accelerator.print(f'Testing [{i + 1}/{len(test_loader)}]', flush=True)
+        
+        # Compute and print test results
+        test_results = {}
+        for metric_name in test_metrics:
+            batch_acc = test_metrics[metric_name].aggregate()[0].to(accelerator.device)
+            if accelerator.num_processes > 1:
+                batch_acc = accelerator.reduce(batch_acc) / accelerator.num_processes
+            test_results[f'Test/{metric_name}'] = float(batch_acc.mean())
+        
+        accelerator.print("\n" + "="*60)
+        accelerator.print("FINAL TEST RESULTS (5% Test Set)")
+        accelerator.print("="*60)
+        for metric_name, value in test_results.items():
+            accelerator.print(f"{metric_name}: {value:.4f}")
+        accelerator.print("="*60)
+        
+        # Save test results to file
+        results_file = f'{os.getcwd()}/model_store/{config.finetune.checkpoint}/test_results.txt'
+        with open(results_file, 'w') as f:
+            f.write("Final Test Results (5% Test Set)\n")
+            f.write("="*60 + "\n")
+            for metric_name, value in test_results.items():
+                f.write(f"{metric_name}: {value:.6f}\n")
+            f.write("="*60 + "\n")
+        accelerator.print(f"\nTest results saved to: {results_file}")
+    
+    sys.exit(0)

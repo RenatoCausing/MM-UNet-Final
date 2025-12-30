@@ -1,7 +1,7 @@
 trainer:
-  num_epochs: 10
+  num_epochs: 40
   warmup: 2
-  train_ratio: 0.8
+  train_ratio: 0.95
   lr: 0.001
   min_lr: 0.0000001
   optimizer: adamw
@@ -26,7 +26,7 @@ dataset:
     # ./Segmented/ - contains segmented images (0001.png, 0002.png, ...)
     # The data_root points to the repo folder containing Original and Segmented
     data_root: ./
-    batch_size: 2
+    batch_size: 4
     num_workers: 4
     image_size: 1024
     image_mean: [0.485, 0.456, 0.406]
@@ -38,10 +38,10 @@ dataset:
     label_subdir: Segmented
     train_label_pattern: "{base_name}.png"
     val_label_pattern: "{base_name}.png"
-    # Train/val/test split (70% train, 15% val, 15% test)
-    train_ratio: 0.7
-    val_ratio: 0.15
-    test_ratio: 0.15
+    # Train/val/test split (95% train, 0% val, 5% test)
+    train_ratio: 0.95
+    val_ratio: 0.0
+    test_ratio: 0.05
     # Augmentation transforms (used during training)
     transform_cutmix: False
     transform_random_resized_crop: True
