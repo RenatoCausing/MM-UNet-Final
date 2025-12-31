@@ -430,6 +430,11 @@ class FIVESDataset(Dataset):
         # Apply transforms to image
         image_tensor = transforms.Compose(img_transform_list)(image_p)
         
+        # Validate image tensor - clamp extreme values
+        image_tensor = torch.clamp(image_tensor, min=-10.0, max=10.0)
+        if torch.isnan(image_tensor).any():
+            image_tensor = torch.nan_to_num(image_tensor, nan=0.0)
+        
         # Process target (binary mask)
         if target_p.mode != 'L':
             target_p = target_p.convert('L')
@@ -439,6 +444,9 @@ class FIVESDataset(Dataset):
             lbl_tensor_binary, [target_h, target_w],
             interpolation=InterpolationMode.NEAREST, antialias=False
         )
+        
+        # Ensure binary mask is valid
+        target_tensor = torch.clamp(target_tensor, min=0.0, max=1.0)
         
         return image_tensor, target_tensor
     
