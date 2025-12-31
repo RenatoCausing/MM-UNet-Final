@@ -64,6 +64,10 @@ class TestMetrics:
             pred: Predicted binary mask (B, 1, H, W)
             target: Ground truth mask (B, 1, H, W)
         """
+        # Ensure both tensors are on the same device
+        if pred.device != target.device:
+            target = target.to(pred.device)
+        
         pred = pred.float()
         target = target.float()
         
