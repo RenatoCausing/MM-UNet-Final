@@ -32,34 +32,9 @@ def train_one_epoch(model: torch.nn.Module, loss_functions: Dict[str, torch.nn.m
                     post_trans: monai.transforms.Compose, accelerator: Accelerator, epoch: int, step: int, loss_weights):
     # 训练
     model.train()
-    nan_count = 0
-    max_nan_batches = 10  # Stop if too many NaN batches
     
     for i, image_batch in enumerate(train_loader):
-        # Check for NaN/Inf in input data
-        if torch.isnan(image_batch[0]).any() or torch.isinf(image_batch[0]).any():
-            accelerator.print(f"WARNING: NaN/Inf in input images at step {step}, skipping batch")
-            nan_count += 1
-            step += 1
-            continue
-        if torch.isnan(image_batch[1]).any() or torch.isinf(image_batch[1]).any():
-            accelerator.print(f"WARNING: NaN/Inf in masks at step {step}, skipping batch")
-            nan_count += 1
-            step += 1
-            continue
-            
         logits = model(image_batch[0])
-        
-        # Check for NaN/Inf in model output
-        if torch.isnan(logits).any() or torch.isinf(logits).any():
-            accelerator.print(f"WARNING: NaN/Inf in model output at step {step}, skipping batch")
-            nan_count += 1
-            optimizer.zero_grad()  # Clear any accumulated gradients
-            step += 1
-            if nan_count >= max_nan_batches:
-                accelerator.print(f"ERROR: Too many NaN batches ({nan_count}), stopping training")
-                raise RuntimeError(f"Training unstable: {nan_count} NaN batches detected")
-            continue
             
         total_loss = 0
         log = ''
@@ -70,17 +45,6 @@ def train_one_epoch(model: torch.nn.Module, loss_functions: Dict[str, torch.nn.m
             accelerator.log({'Train/Weighted_' + name: float(weighted_loss)}, step=step)
             total_loss += weighted_loss
             log += f'{name}: {current_loss:.4f} '
-        
-        # Check for NaN/Inf in loss BEFORE backward pass
-        if torch.isnan(total_loss) or torch.isinf(total_loss):
-            accelerator.print(f"WARNING: NaN/Inf in loss at step {step}, skipping gradient update")
-            nan_count += 1
-            optimizer.zero_grad()  # Clear any accumulated gradients
-            step += 1
-            if nan_count >= max_nan_batches:
-                accelerator.print(f"ERROR: Too many NaN batches ({nan_count}), stopping training")
-                raise RuntimeError(f"Training unstable: {nan_count} NaN batches detected")
-            continue
             
         val_outputs = post_trans(logits)
         for metric_name in metrics:
@@ -93,25 +57,6 @@ def train_one_epoch(model: torch.nn.Module, loss_functions: Dict[str, torch.nn.m
         accelerator.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
         optimizer.zero_grad()
-
-        # Monitor gradient norms for debugging (every 100 steps)
-        if step % 100 == 0:
-            total_norm = 0.0
-            has_nan_grad = False
-            for p in model.parameters():
-                if p.grad is not None:
-                    if torch.isnan(p.grad).any() or torch.isinf(p.grad).any():
-                        has_nan_grad = True
-                        break
-                    param_norm = p.grad.data.norm(2)
-                    total_norm += param_norm.item() ** 2
-            total_norm = total_norm ** 0.5
-            
-            if has_nan_grad:
-                accelerator.print(f"WARNING: NaN/Inf in gradients at step {step}")
-                nan_count += 1
-            else:
-                accelerator.log({'Train/gradient_norm': total_norm}, step=step)
         
         accelerator.log({
             'Train/Total Loss': float(total_loss),
@@ -299,33 +244,16 @@ if __name__ == '__main__':
 
     # }
 
-    # Custom numerically stable loss wrapper for fp16 training
-    class StableDiceFocalLoss(nn.Module):
-        """Wrapper around DiceFocalLoss with fp16-safe computation."""
-        def __init__(self):
-            super().__init__()
-            self.loss_fn = monai.losses.DiceFocalLoss(
-                smooth_nr=1e-5, 
-                smooth_dr=1e-5, 
-                to_onehot_y=False, 
-                sigmoid=True,
-                gamma=2.0,
-                lambda_dice=1.0,
-                lambda_focal=1.0
-            )
-        
-        def forward(self, logits, targets):
-            # Clamp logits to prevent extreme values in fp16
-            logits_clamped = torch.clamp(logits, min=-10.0, max=10.0)
-            
-            # Compute loss in fp32 for numerical stability
-            with torch.cuda.amp.autocast(enabled=False):
-                loss = self.loss_fn(logits_clamped.float(), targets.float())
-            
-            return loss
-
     loss_functions = {
-        'dice_focal_loss': StableDiceFocalLoss(),
+        'dice_focal_loss': monai.losses.DiceFocalLoss(
+            smooth_nr=1e-5, 
+            smooth_dr=1e-5, 
+            to_onehot_y=False, 
+            sigmoid=True,
+            gamma=2.0,
+            lambda_dice=1.0,
+            lambda_focal=1.0
+        ),
     }
 
     loss_weights = {
