@@ -29,7 +29,7 @@ dataset:
     # ./Segmented/ - contains segmented images (0001.png, 0002.png, ...)
     # The data_root points to the repo folder containing Original and Segmented
     data_root: ./
-    batch_size: 8  # Increased for better BN stability (effective = 32 with gradient accumulation)
+    batch_size: 6  # Increased for better BN stability (effective = 32 with gradient accumulation)
     num_workers: 4
     image_size: 1024
     image_mean: [0.485, 0.456, 0.406]
