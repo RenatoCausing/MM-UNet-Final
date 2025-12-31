@@ -9,6 +9,8 @@ trainer:
   weight_decay_end: 0.04
   pred_ratio_var: 0
   resume: False
+  gradient_accumulation_steps: 4  # Accumulate gradients over 4 steps (effective batch size = 4)
+  mixed_precision: fp16  # Enable mixed precision training to save memory
 #  dataset_choose: CVC_ClinicDB
 #  dataset_choose: Kvasir_SEG
 #  dataset_choose: EDD_seg
@@ -26,7 +28,7 @@ dataset:
     # ./Segmented/ - contains segmented images (0001.png, 0002.png, ...)
     # The data_root points to the repo folder containing Original and Segmented
     data_root: ./
-    batch_size: 4
+    batch_size: 1  # Reduced from 4 to save GPU memory
     num_workers: 4
     image_size: 1024
     image_mean: [0.485, 0.456, 0.406]

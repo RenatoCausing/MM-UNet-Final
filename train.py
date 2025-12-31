@@ -47,11 +47,12 @@ def train_one_epoch(model: torch.nn.Module, loss_functions: Dict[str, torch.nn.m
         for metric_name in metrics:
             metrics[metric_name](y_pred=val_outputs, y=image_batch[1])
 
-        
-        
+        # Use gradient accumulation
         accelerator.backward(total_loss)
-        optimizer.step()
-        optimizer.zero_grad()
+        
+        if accelerator.sync_gradients:
+            optimizer.step()
+            optimizer.zero_grad()
 
         # for name, param in model.named_parameters():
         #     if param.grad is None:
@@ -163,7 +164,16 @@ if __name__ == '__main__':
     utils.same_seeds(50)
     logging_dir = os.path.join(os.getcwd(), 'logs',
                                config.finetune.checkpoint + datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
-    accelerator = Accelerator(cpu=False)
+    
+    # Configure gradient accumulation and mixed precision for memory efficiency
+    gradient_accumulation_steps = config.trainer.get('gradient_accumulation_steps', 1)
+    mixed_precision = config.trainer.get('mixed_precision', 'no')
+    
+    accelerator = Accelerator(
+        cpu=False,
+        gradient_accumulation_steps=gradient_accumulation_steps,
+        mixed_precision=mixed_precision
+    )
     Logger(logging_dir if accelerator.is_local_main_process else None)
 
     accelerator.init_trackers(os.path.split(__file__)[-1].split(".")[0])
@@ -274,7 +284,14 @@ if __name__ == '__main__':
     # 开始训练
     accelerator.print("Start Training! ")
     accelerator.print(f"Training for {config.trainer.num_epochs} epochs with 95% train / 5% test split")
+    accelerator.print(f"Batch size: {config.dataset.FIVES.batch_size}, Gradient accumulation steps: {gradient_accumulation_steps}")
+    accelerator.print(f"Effective batch size: {config.dataset.FIVES.batch_size * gradient_accumulation_steps}")
+    accelerator.print(f"Mixed precision: {mixed_precision}")
     accelerator.print("Saving weights for every epoch...")
+    
+    # Clear GPU cache before training
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
     for epoch in range(starting_epoch, config.trainer.num_epochs):
         # 训练
@@ -291,6 +308,10 @@ if __name__ == '__main__':
                    f'{epoch_dir}/epoch_info.pth.tar')
         
         accelerator.print(f'Epoch [{epoch + 1}/{config.trainer.num_epochs}] completed and saved to {epoch_dir}')
+        
+        # Clear GPU cache after each epoch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     # Save final checkpoint
     accelerator.print('Saving final checkpoint...')

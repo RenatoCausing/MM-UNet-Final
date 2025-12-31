@@ -382,24 +382,29 @@ def main():
     # Prepare model
     model = accelerator.prepare(model)
     
-    # Load checkpoint
-    print(f"\nLoading checkpoint from {args.checkpoint}...")
-    try:
-        accelerator.load_state(args.checkpoint)
-        print("Checkpoint loaded successfully!")
-    except Exception as e:
-        print(f"Warning: Could not load full accelerator state: {e}")
-        print("Trying to load model weights directly...")
-        
-        # Try loading model weights directly
-        model_path = os.path.join(args.checkpoint, "pytorch_model.bin")
-        if os.path.exists(model_path):
-            state_dict = torch.load(model_path, map_location=accelerator.device)
-            model.load_state_dict(state_dict)
-            print("Model weights loaded successfully!")
-        else:
-            print(f"ERROR: Could not find model weights at {model_path}")
-            sys.exit(1)
+    # Load checkpoint (if it exists)
+    if os.path.exists(args.checkpoint):
+        print(f"\nLoading checkpoint from {args.checkpoint}...")
+        try:
+            accelerator.load_state(args.checkpoint)
+            print("Checkpoint loaded successfully!")
+        except Exception as e:
+            print(f"Warning: Could not load full accelerator state: {e}")
+            print("Trying to load model weights directly...")
+            
+            # Try loading model weights directly
+            model_path = os.path.join(args.checkpoint, "pytorch_model.bin")
+            if os.path.exists(model_path):
+                state_dict = torch.load(model_path, map_location=accelerator.device)
+                model.load_state_dict(state_dict)
+                print("Model weights loaded successfully!")
+            else:
+                print(f"Warning: Could not find model weights at {model_path}")
+                print("Proceeding with untrained model (not recommended for testing)...")
+    else:
+        print(f"\nWarning: Checkpoint path '{args.checkpoint}' does not exist.")
+        print("Proceeding with untrained model (not recommended for testing)...")
+        print("To test a trained model, first run training or specify a valid checkpoint path.")
     
     # Create output directory with timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
