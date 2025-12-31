@@ -86,18 +86,16 @@ def train_one_epoch(model: torch.nn.Module, loss_functions: Dict[str, torch.nn.m
         for metric_name in metrics:
             metrics[metric_name](y_pred=val_outputs, y=image_batch[1])
 
-        # Use gradient accumulation
+        # Backward pass
         accelerator.backward(total_loss)
         
-        if accelerator.sync_gradients:
-            # Gradient clipping to prevent exploding gradients
-            max_grad_norm = 1.0
-            accelerator.clip_grad_norm_(model.parameters(), max_grad_norm)
-            optimizer.step()
-            optimizer.zero_grad()
+        # Gradient clipping to prevent exploding gradients
+        accelerator.clip_grad_norm_(model.parameters(), 1.0)
+        optimizer.step()
+        optimizer.zero_grad()
 
-        # Monitor gradient norms for debugging
-        if accelerator.sync_gradients and step % 10 == 0:
+        # Monitor gradient norms for debugging (every 100 steps)
+        if step % 100 == 0:
             total_norm = 0.0
             has_nan_grad = False
             for p in model.parameters():
@@ -110,8 +108,7 @@ def train_one_epoch(model: torch.nn.Module, loss_functions: Dict[str, torch.nn.m
             total_norm = total_norm ** 0.5
             
             if has_nan_grad:
-                accelerator.print(f"WARNING: NaN/Inf in gradients at step {step}, zeroing gradients")
-                optimizer.zero_grad()
+                accelerator.print(f"WARNING: NaN/Inf in gradients at step {step}")
                 nan_count += 1
             else:
                 accelerator.log({'Train/gradient_norm': total_norm}, step=step)
@@ -224,15 +221,7 @@ if __name__ == '__main__':
     logging_dir = os.path.join(os.getcwd(), 'logs',
                                config.finetune.checkpoint + datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
     
-    # Configure gradient accumulation and mixed precision for memory efficiency
-    gradient_accumulation_steps = config.trainer.get('gradient_accumulation_steps', 1)
-    mixed_precision = config.trainer.get('mixed_precision', 'no')
-    
-    accelerator = Accelerator(
-        cpu=False,
-        gradient_accumulation_steps=gradient_accumulation_steps,
-        mixed_precision=mixed_precision
-    )
+    accelerator = Accelerator(cpu=False)
     Logger(logging_dir if accelerator.is_local_main_process else None)
 
     accelerator.init_trackers(os.path.split(__file__)[-1].split(".")[0])
@@ -373,9 +362,7 @@ if __name__ == '__main__':
     # 开始训练
     accelerator.print("Start Training! ")
     accelerator.print(f"Training for {config.trainer.num_epochs} epochs with 95% train / 5% test split")
-    accelerator.print(f"Batch size: {config.dataset.FIVES.batch_size}, Gradient accumulation steps: {gradient_accumulation_steps}")
-    accelerator.print(f"Effective batch size: {config.dataset.FIVES.batch_size * gradient_accumulation_steps}")
-    accelerator.print(f"Mixed precision: {mixed_precision}")
+    accelerator.print(f"Batch size: {config.dataset.FIVES.batch_size}")
     accelerator.print("Saving weights for every epoch...")
     
     # Clear GPU cache before training

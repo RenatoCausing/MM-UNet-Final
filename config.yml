@@ -1,18 +1,14 @@
 trainer:
   num_epochs: 30
-  warmup: 3  # Increased warmup for more stability
+  warmup: 3
   train_ratio: 0.95
-  lr: 0.0003  # Further reduced for stability with numerical issues
+  lr: 0.0005
   min_lr: 0.0000001
   optimizer: adamw
   weight_decay: 0.05
   weight_decay_end: 0.04
   pred_ratio_var: 0
   resume: False
-  gradient_accumulation_steps: 4  # Accumulate gradients over 4 steps (effective batch size = 12)
-  # mixed_precision options: 'no' (most stable), 'bf16' (stable if supported), 'fp16' (fastest but can cause NaN)
-  mixed_precision: bf16  # Changed from fp16 to bf16 for better numerical stability
-  max_grad_norm: 1.0  # Gradient clipping threshold
 #  dataset_choose: CVC_ClinicDB
 #  dataset_choose: Kvasir_SEG
 #  dataset_choose: EDD_seg
