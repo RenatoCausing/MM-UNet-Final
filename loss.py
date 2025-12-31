@@ -3,12 +3,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class DICE_BCE_Loss(nn.Module):
-    def __init__(self, smooth=1):
+    def __init__(self, smooth=1e-5):
         super().__init__()
         self.smooth = smooth
 
     def forward(self, logits, targets):
-        logits= torch.sigmoid(logits)
+        logits = torch.sigmoid(logits)
+        # Clamp to prevent numerical instability
+        logits = torch.clamp(logits, min=1e-7, max=1-1e-7)
+        
         intersection = 2*(logits * targets).sum() + self.smooth
         union = (logits + targets).sum() + self.smooth
         dice_loss = 1. - intersection / union

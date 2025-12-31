@@ -51,15 +51,29 @@ def train_one_epoch(model: torch.nn.Module, loss_functions: Dict[str, torch.nn.m
         accelerator.backward(total_loss)
         
         if accelerator.sync_gradients:
+            # Gradient clipping to prevent exploding gradients
+            max_grad_norm = 1.0
+            accelerator.clip_grad_norm_(model.parameters(), max_grad_norm)
             optimizer.step()
             optimizer.zero_grad()
 
-        # for name, param in model.named_parameters():
-        #     if param.grad is None:
-        #         print(name)
+        # Monitor gradient norms for debugging
+        if accelerator.sync_gradients and step % 10 == 0:
+            total_norm = 0.0
+            for p in model.parameters():
+                if p.grad is not None:
+                    param_norm = p.grad.data.norm(2)
+                    total_norm += param_norm.item() ** 2
+            total_norm = total_norm ** 0.5
+            accelerator.log({'Train/gradient_norm': total_norm}, step=step)
+            
+            # Check for NaN in loss or gradients
+            if torch.isnan(total_loss) or torch.isinf(total_loss):
+                accelerator.print(f"WARNING: NaN or Inf detected in loss at step {step}!")
         
         accelerator.log({
             'Train/Total Loss': float(total_loss),
+            'Train/Learning Rate': optimizer.param_groups[0]['lr'],
         }, step=step)
         accelerator.print(
             f'Epoch [{epoch + 1}/{config.trainer.num_epochs}] Training [{i + 1}/{len(train_loader)}] Loss: {total_loss:1.5f} {log}',
@@ -181,6 +195,11 @@ if __name__ == '__main__':
 
     accelerator.print('Load Model...')
     model = give_model(config)
+    
+    # Convert BatchNorm to SyncBatchNorm for better stability with small batches
+    if accelerator.num_processes > 1:
+        model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
+        accelerator.print('Converted BatchNorm to SyncBatchNorm for multi-GPU training')
 
     accelerator.print('Load Dataloader...')
 
@@ -247,7 +266,15 @@ if __name__ == '__main__':
     # }
 
     loss_functions ={
-        'dice_focal_loss': monai.losses.DiceFocalLoss(smooth_nr=0, smooth_dr=1e-5, to_onehot_y=False, sigmoid=True),
+        'dice_focal_loss': monai.losses.DiceFocalLoss(
+            smooth_nr=1e-5, 
+            smooth_dr=1e-5, 
+            to_onehot_y=False, 
+            sigmoid=True,
+            gamma=2.0,  # Focal loss gamma parameter
+            lambda_dice=1.0,  # Dice loss weight
+            lambda_focal=1.0  # Focal loss weight
+        ),
     }
 
     loss_weights = {
@@ -294,6 +321,12 @@ if __name__ == '__main__':
         torch.cuda.empty_cache()
 
     for epoch in range(starting_epoch, config.trainer.num_epochs):
+        # Print current learning rate
+        current_lr = optimizer.param_groups[0]['lr']
+        accelerator.print(f"\n{'='*60}")
+        accelerator.print(f"Epoch {epoch + 1}/{config.trainer.num_epochs} - Learning Rate: {current_lr:.6f}")
+        accelerator.print(f"{'='*60}\n")
+        
         # 训练
         step = train_one_epoch(model, loss_functions, train_loader,
                                optimizer, scheduler, config, metrics,
